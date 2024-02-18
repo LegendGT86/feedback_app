@@ -1,13 +1,15 @@
 from flask import Flask, render_template, request
 from flask_sqlalchemy import SQLAlchemy
+from send_mail import send_mail
 
 app = Flask(__name__)
+
 
 ENV = 'dev'
 
 if ENV == 'dev':
     app.debug = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:admin/Feedback'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:admin@localhost/Feedback'
 
 else:
     app.debug = False
@@ -20,7 +22,7 @@ db = SQLAlchemy(app)
 class Feedback(db.Model):
     __tablename__='feedback'
     id = db.Column(db.Integer, primary_key=True)
-    customer = db.Column(db.String(200), unique=True)
+    customer = db.Column(db.String(200))
     dealer = db.Column(db.String(200))
     rating = db.Column(db.Integer)
     comments = db.Column(db.Text())
@@ -46,7 +48,16 @@ def submit():
 
         if customer == '' or dealer == '':
             return render_template('index.html', message='Please complete all required fields')
-    return render_template('success.html')
+        with app.app_context():
+            db.create_all()
+        if db.session.query(Feedback).filter(Feedback.customer == customer).count() == 0:
+            data = Feedback(customer, dealer, rating, comments)
+            db.session.add(data)
+            db.session.commit()
+            send_mail(customer, dealer, rating, comments)
+
+            return render_template('success.html')
+        return render_template('index.html', message='you have already submitted feedback')
 
 if __name__ == '__main__':
     app.run()
